@@ -1,2 +1,48 @@
-== About ==
-node-s3 is a simple web interface for creating and manipulating buckets on Amazon Web Services S3.
+== What It Is? ==
+node-s3 is a simple web application for creating and manipulating buckets and files on Amazon Web Services S3. You can also use it to proxy file uploads directly to AWS.
+
+This basis for this little app was, in part, inspired by:
+http://rfw.posterous.com/how-nodejs-saved-my-web-application
+
+The above link should hopefully provide some insight on how this app might be useful.
+
+== Configuration ==
+Just edit config.js and place your own configuration values into each of the possible environment variables.
+
+var dev = {
+  ports:[8000],
+  s3:{
+      bucket: "myawesomebucket-dev",
+      key: "somekeyfordevelopment",
+      secret: "somesecretfordevelopment",
+      reviewer: "bastard@samurai.com"
+  }
+}
+
+var prod = {
+  ports:[8000],
+  s3:{
+      bucket: "myawesomebucket-prod",
+      key: "somekeyforproduction",
+      secret: "somesecretforproduction",
+      reviewer: "bastard@samurai.com"
+  }
+}
+
+If you need to create additional environment variable options, then remember to modify the config#init function accordingly. The port value is an array so you can define multiple ports to listen on. When the application starts, it will create a new app instance per port.
+
+== Fire It Up, Man ==
+To fire up the application on each of the designated port options:
+
+node app.js --env=[env option (defaults to dev)]
+
+== Future Improvements ==
+
+-The application doesn't save the file to disk before uploading it. Simple tweak if you need to change the underlying /upload implementation just look at the commented out code.
+
+-The application needs a few tweaks if you want it to work with Nginx Upload Module.
+
+-The views are baked into the controller action responses. I may consider porting this to http://github.com/visionmedia/express
+
+== Wax It, Flip It, Rub It Down ==
+If you find this app useful please tweak it to your hearts content. If you feel like sharing your modifications, please do.

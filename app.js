@@ -14,12 +14,12 @@ var env = null
 function log(s){sys.puts(s)}
 function debug(s){sys.debug(s)}
 function inspect(s){sys.inspect(s)}
-
+function str(v){return (v != undefined) ? v : '' }
 
 function app(){
     return http.createServer(function(req, res) {
             // Simple path-based request dispatcher
-            sys.puts(req.headers.host + req.url)
+            log(req.method + ' http://' + req.headers.host + req.url)
             switch (url.parse(req.url).pathname) {
                 case '/':
                     display_form(req, res);
@@ -116,23 +116,53 @@ start()
 
 function get_bucket(req, res) {
     var b = req.params.b
+    var marker = req.params.marker
+    var maxkeys = req.params.maxkeys
+    var delimiter = req.params.delimiter
+    var prefix = req.params.prefix
+    
     if (b) {
-        s3.bucket({'bucket': b}, function(data){
+        s3.bucket({'bucket': b, 
+                   'marker':marker, 
+                   'maxkeys':maxkeys, 
+                   'prefix': prefix, 
+                   'delimiter':delimiter}, function(data){
+            
             var a = [], 
-                list = data.listbucketresult.contents, 
-                o;
-            a.push('<h4>Bucket: '+ b +'</h4>')
-            a.push(list.length + ' items<hr />')
+                list = data.listbucketresult.contents,
+                truncated = data.listbucketresult.istruncated,
+                next_marker, o;
+
             for (var i=0; i < list.length; i++) {
                 o = list[i]
-                // log(sys.inspect(o))
+                next_marker = o.key;
                 a.push('<a href="'+ s3.url(b, o.key) +'">'+ o.key + '</a>'+ ' (' + o.size + ')' + '(<a href="/delete?filename='+o.key+'&bucket='+b+'">delete</a>)')
             }
+            // add next pagination
+            if (truncated){
+                var params = s3.bucket_request_params(next_marker, maxkeys, prefix, delimiter);
+                a.push('<hr /><a href="?b='+ b +'&'+ params.replace('max-keys', 'maxkeys') +'">Next</a>')
+            }
+            
             res.writeHeader(200, {"Content-Type": "text/html"});
             res.write(
                 '<html>'+
                 '<head></head>'+
                 '<body>'+
+                '<h4>Search: '+ b +'</h4>' +
+                '<form method="get">' +
+                'Marker: <input type="text" name="marker" value="'+ str(marker) +'" /> <br />' +
+                'Prefix: <input type="text" name="prefix" value="'+ str(prefix) +'" /> <br />' +
+                'Delimiter: <input type="text" name="delimiter" value="'+ str(delimiter) +'" /> <br />' +
+                'Max-Keys: <input type="text" name="maxkeys" value="'+ str(maxkeys) +'" /> <br />' +
+                '<input type="hidden" name="b" value="'+ b +'" />' +
+                '<input type="submit" name="search" value="search" />' +
+                ' <a href="http://docs.amazonwebservices.com/AmazonS3/2006-03-01/API/index.html?RESTBucketGET.html">help?</a>' +
+                '</form>' +
+                '<h4>Bucket: '+ b +'</h4>' +
+                '<hr />' +
+                list.length + ' items' +
+                '<hr />' + 
                 a.join('<br />') +
                 '</body>'+
                 '</html>'
@@ -332,8 +362,6 @@ function delete_file(req, res){
 
 
 }
-
-
 
 /*
 * Handles page not found error

@@ -137,12 +137,15 @@ exports.del = function(args, cb){
 exports.bucket = function(args, cb){
     var bucket = '';
     var resource = '/';
-
+    
     if (args.bucket != undefined) {
         bucket = args.bucket + '.';
         resource = '/' + args.bucket + '/';
-    } 
+    }
     var url = 'http://' + bucket + this.config.host;
+    var params = bucket_request_params(args.marker, args.maxkeys, args.prefix, args.delimiter);
+    if (params.length) url += '?' + params;
+    
     var dt = date();
     var siggy = sign(this.config.secret, GET, resource, dt, '', '', '');
     var options = {
@@ -150,7 +153,8 @@ exports.bucket = function(args, cb){
             'Date': dt,
             'User-Agent': this.config.user_agent,
             'Authorization': authorization(this.config.key, siggy)
-        }
+        },
+        body:{}
     };
     rest.get(url, options).addListener('complete', cb);
 }
@@ -196,7 +200,18 @@ exports.create_bucket = function(args, cb){
     rest.put([url, resource].join(''), options).addListener('complete', cb);
 }
 
+exports.bucket_request_params = function(marker, maxkeys, prefix, delimiter){
+    return bucket_request_params(marker, maxkeys, prefix, delimiter)
+}
 
+function bucket_request_params(marker, maxkeys, prefix, delimiter) {
+    var params = [];
+    if (marker != undefined) params.push('marker=' + marker);
+    if (maxkeys != undefined) params.push('max-keys=' + maxkeys);
+    if (prefix != undefined) params.push('prefix=' + prefix);
+    if (delimiter != undefined) params.push('delimiter=' + delimiter);
+    return params.join('&');
+}
 
 function date(){
     return new Date().toUTCString();

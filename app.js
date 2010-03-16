@@ -203,10 +203,15 @@ function display_form(req, res) {
         '<html>'+
         '<head></head>'+
         '<body>'+
+        '<a href="/buckets">View buckets</a>' +
+        ' | <a href="/create_bucket">Create bucket</a>' +
+        '<hr />' +
         '<form action="/upload" method="post" enctype="multipart/form-data">'+
+        'Upload to ' +
+        s3.url(bucket) + 
         '<input type="file" name="upload-file" />'+
         '<input type="submit" value="Upload" />'+
-        '</form>'+
+        '</form>'+ 
         '</body>'+
         '</html>'
     );
@@ -245,21 +250,21 @@ function upload_file(req, res) {
           chunks.push(chunk)
         }
     });
-
+    
     mp.addListener("complete", function() {
+        // remember, this process only shows one file upload. adjust accordingly.
+        // options: streaming to disk first, then write to s3 in the callback (copy the s3 call below).
         // var path = "./uploads/" + filename
         // fs.writeFile(path, chunks.join(''), 'binary', function(err, written){
         //     log('binary gods obey')
         // })
-        
+        // streaming to s3
         filename = Math.floor((Math.random() * 1024)).toString() + '_' + filename
-		var file = {'name': filename, 'path':'./uploads/', 'content_type': content_type, 'data': chunks.join('')};
+		var file = {'name': filename, 'content_type': content_type, 'data': chunks.join('')};
 		var args = {'bucket': bucket, 'file':file};
 
 		s3.upload(args, function(data){
 		    log("upload to s3 finished")
-            // log(sys.inspect(data))
-		    
             var response = '<html>'+
                 '<head></head>'+
                 '<body>'+

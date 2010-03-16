@@ -35,7 +35,9 @@ exports.init = function(args) {
 }
 
 exports.url = function(bucket, object) {
-    return "http://" + this.config.host + '/' + bucket + '/' + object
+    var url = "http://" + this.config.host + '/' + bucket + '/';
+    if (object != undefined) url += object;
+    return url
 }
 
 

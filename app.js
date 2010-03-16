@@ -25,7 +25,7 @@ function app(){
                     display_form(req, res);
                     break;
                 case '/upload':
-                    upload_file(req, res);
+                    parse_request_params(req, res, upload_file);
                     break;
                 case '/delete':
                     parse_request_params(req, res, delete_file);
@@ -67,8 +67,15 @@ function parse_request_params(req, res, cb){
         
     mp.addListener("partBegin", function(part) {
         name = part.name;
-        if (name) params[name] = "";
-        
+        if (name) {
+            params[name] = "";
+            filename = part.filename
+            if (filename) {
+                params[name + '-filename' ] = filename.replace(' ', '-') 
+                params[name + '-content-type' ] = part.headers['content-type'] 
+            }
+            
+        }
       });
     mp.addListener("body", function(chunk) {
         if (name) {
@@ -109,7 +116,6 @@ config.init(env)
 
 // create s3 instance
 s3.init(config.base().s3)
-var bucket = config.base().s3.bucket
 
 // init server
 start()
@@ -139,7 +145,8 @@ function get_bucket(req, res) {
                 a.push('<a href="'+ s3.url(b, o.key) +'">'+ o.key + '</a>'+ ' (' + o.size + ')' + '(<a href="/delete?filename='+o.key+'&bucket='+b+'">delete</a>)')
             }
             // add next pagination
-            if (truncated){
+            
+            if (truncated == 'true'){
                 var params = s3.bucket_request_params(next_marker, maxkeys, prefix, delimiter);
                 a.push('<hr /><a href="?b='+ b +'&'+ params.replace('max-keys', 'maxkeys') +'">Next</a>')
             }
@@ -227,25 +234,37 @@ function buckets(req, res){
 * Display upload form
 */
 function display_form(req, res) {
-    
-    res.writeHeader(200, {"Content-Type": "text/html"});
-    res.write(
-        '<html>'+
-        '<head></head>'+
-        '<body>'+
-        '<a href="/buckets">View buckets</a>' +
-        ' | <a href="/create_bucket">Create bucket</a>' +
-        '<hr />' +
-        '<form action="/upload" method="post" enctype="multipart/form-data">'+
-        'Upload to ' +
-        s3.url(bucket) + 
-        '<input type="file" name="upload-file" />'+
-        '<input type="submit" value="Upload" />'+
-        '</form>'+ 
-        '</body>'+
-        '</html>'
-    );
-    res.close();
+    s3.bucket({}, function(data){
+        var a = [], 
+            list = data.listallmybucketsresult.buckets.bucket, 
+            b;
+
+        for (var i=0; i < list.length; i++) {
+            b = list[i]
+            a.push('<option value="'+ b.name +'">'+ b.name +'</option>')
+        }
+        
+        res.writeHeader(200, {"Content-Type": "text/html"});
+        res.write(
+            '<html>'+
+            '<head></head>'+
+            '<body>'+
+            '<a href="/buckets">View buckets</a>' +
+            ' | <a href="/create_bucket">Create bucket</a>' +
+            '<hr />' +
+            '<form action="/upload" method="post" enctype="multipart/form-data">'+
+            'Upload to ' +
+            '<select name="b">' +
+            a.join('') +
+            '</select> / ' +
+            '<input type="file" name="upload-file" />'+
+            '<input type="submit" value="Upload" />'+
+            '</form>'+ 
+            '</body>'+
+            '</html>'
+        );
+        res.close();
+    })
 }
  
 /*
@@ -256,32 +275,12 @@ function upload_file(req, res) {
     req.setBodyEncoding("binary");
     // log(sys.inspect(req))
     var mp = multipart.parse(req), 
-        chunks = [],
-        fields = {}, 
-        name, 
-        filename, 
-        content_type;
+        b = req.params.b,
+        filedata = req.params['upload-file'],
+        filename = req.params['upload-file-filename'],
+        content_type = req.params['upload-file-content-type'],
+        dt = new Date().valueOf();
 
-    mp.addListener("partBegin", function (part) {
-        // log(part.name)
-        // log(part.filename)
-        // log(content_type)
-        // log(sys.inspect(part.boundary))
-        content_type = part.headers['content-type']
-        name = part.name;
-        filename = part.filename.replace(' ', '-');
-        // if (name) fields[name] = "";
-        
-      });
-    mp.addListener("body", function (chunk) {
-        if (name) {
-          // if (fields[name].length > 1024) return;
-          // fields[name] += chunk;
-          chunks.push(chunk)
-        }
-    });
-    
-    mp.addListener("complete", function() {
         // remember, this process only shows one file upload. adjust accordingly.
         // options: streaming to disk first, then write to s3 in the callback (copy the s3 call below).
         // var path = "./uploads/" + filename
@@ -289,16 +288,20 @@ function upload_file(req, res) {
         //     log('binary gods obey')
         // })
         // streaming to s3
-        filename = Math.floor((Math.random() * 1024)).toString() + '_' + filename
-		var file = {'name': filename, 'content_type': content_type, 'data': chunks.join('')};
-		var args = {'bucket': bucket, 'file':file};
-
-		s3.upload(args, function(data){
-		    log("upload to s3 finished")
+        
+        filename = dt + '-' + filename.replace(' ', '-')
+        var args = {'bucket': b, 
+                    'file':{'name': filename, 'content_type': content_type, 'data': filedata}};
+        s3.upload(args, function(data){
+            var upload_url = s3.url(b, filename)
+            
+            log("upload to s3 finished: " + upload_url)
             var response = '<html>'+
                 '<head></head>'+
                 '<body>'+
-                '<img src="'+ s3.url(bucket, filename) +'" />' +
+                '<img src="'+ upload_url +'" />' +
+                '<br />' +
+                upload_url + 
                 '</body>'+
                 '</html>'
                 res.writeHeader(200, {
@@ -307,8 +310,9 @@ function upload_file(req, res) {
                 });
                 res.write(response);
                 res.close();
-		})
-    })    
+        })
+
+
 }
 
 function delete_file(req, res){

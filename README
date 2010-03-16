@@ -16,7 +16,6 @@ Just edit config.js and place your own configuration values into each of the pos
 var dev = {
   ports:[8000],
   s3:{
-      bucket: "myawesomebucket-dev",
       key: "somekeyfordevelopment",
       secret: "somesecretfordevelopment",
       reviewer: "bastard@samurai.com"
@@ -26,7 +25,6 @@ var dev = {
 var prod = {
   ports:[8000],
   s3:{
-      bucket: "myawesomebucket-prod",
       key: "somekeyforproduction",
       secret: "somesecretforproduction",
       reviewer: "bastard@samurai.com"

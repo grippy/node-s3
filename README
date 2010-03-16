@@ -6,6 +6,10 @@ http://rfw.posterous.com/how-nodejs-saved-my-web-application
 
 The above link should hopefully provide some insight on how this app might be useful.
 
+== Requirements ==
+-'bastard samurai' http://www.youtube.com/watch?v=TZuo3ryNFPk
+-nodejs >= 0.1.31 (actually only tested on 0.1.31)
+
 == Configuration ==
 Just edit config.js and place your own configuration values into each of the possible environment variables.
 

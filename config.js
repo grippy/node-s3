@@ -1,20 +1,20 @@
 var dev = {
   ports:[8000],
   s3:{
-      bucket: "myawesomebucket-dev",
-      key: "somekeyfordevelopment",
-      secret: "somesecretfordevelopment",
-      reviewer: "bastard@samurai.com"
+      key: 'key',
+      secret: 'secret',
+      reviewer: 'bastard@samurai.com',
+      upload_directory:'./tmp/'
   }
 }
 
 var prod = {
   ports:[8000],
   s3:{
-      bucket: "myawesomebucket-prod",
-      key: "somekeyforproduction",
-      secret: "somesecretforproduction",
-      reviewer: "bastard@samurai.com"
+      key: 'key',
+      secret: 'secret',
+      reviewer: 'bastard@samurai.com',
+      upload_directory:'./tmp/'
   }
 }
 

@@ -13,7 +13,7 @@ var env = null
 
 function log(s){sys.puts(s)}
 function debug(s){sys.debug(s)}
-function inspect(s){sys.inspect(s)}
+function inspect(o){log(sys.inspect(o))}
 function str(v){return (v != undefined) ? v : '' }
 
 function app(){
@@ -24,9 +24,22 @@ function app(){
                 case '/':
                     display_form(req, res);
                     break;
+                    
+                //-> saves the upload to memory first
                 case '/upload':
                     parse_request_params(req, res, upload_file);
                     break;
+                    
+                //-> streams the upload to s3
+                case '/stream_upload':
+                    stream_upload(req, res);
+                    break;
+
+                //-> saves the upload to disk and then streams to s3
+                case '/save_then_stream_upload':
+                    parse_request_params(req, res, save_then_stream_upload);
+                    break;
+                    
                 case '/delete':
                     parse_request_params(req, res, delete_file);
                     break;
@@ -89,6 +102,7 @@ function parse_request_params(req, res, cb){
     })
 
 }
+
 function parse_argv(){
     var args = process.argv;
     var arg;
@@ -252,14 +266,33 @@ function display_form(req, res) {
             '<a href="/buckets">View buckets</a>' +
             ' | <a href="/create_bucket">Create bucket</a>' +
             '<hr />' +
-            '<form action="/upload" method="post" enctype="multipart/form-data">'+
+            '<h3>Stream Directly to S3</h3>' +
+            '<form action="/save_then_stream_upload" method="post" enctype="multipart/form-data">'+
             'Upload to ' +
             '<select name="b">' +
             a.join('') +
             '</select> / ' +
             '<input type="file" name="upload-file" />'+
             '<input type="submit" value="Upload" />'+
-            '</form>'+ 
+            '</form>'+
+            '<h3>Stream Directly to S3</h3>' +
+            '<form action="/stream_upload" method="post" enctype="multipart/form-data">'+
+            'Upload to ' +
+            '<select name="b">' +
+            a.join('') +
+            '</select> / ' +
+            '<input type="file" name="upload-file" />'+
+            '<input type="submit" value="Upload" />'+
+            '</form>'+            
+            '<h3>Save to Disk and Then Stream</h3>' +
+            '<form action="/save_then_stream_upload" method="post" enctype="multipart/form-data">'+
+            'Upload to ' +
+            '<select name="b">' +
+            a.join('') +
+            '</select> / ' +
+            '<input type="file" name="upload-file" />'+
+            '<input type="submit" value="Upload" />'+
+            '</form>'+
             '</body>'+
             '</html>'
         );
@@ -280,18 +313,17 @@ function upload_file(req, res) {
         filename = req.params['upload-file-filename'],
         content_type = req.params['upload-file-content-type'],
         dt = new Date().valueOf();
-
+        
         // remember, this process only shows one file upload. adjust accordingly.
         // options: streaming to disk first, then write to s3 in the callback (copy the s3 call below).
         // var path = "./uploads/" + filename
         // fs.writeFile(path, chunks.join(''), 'binary', function(err, written){
         //     log('binary gods obey')
         // })
-        // streaming to s3
         
         filename = dt + '-' + filename.replace(' ', '-')
-        var args = {'bucket': b, 
-                    'file':{'name': filename, 'content_type': content_type, 'data': filedata}};
+        var args = {'bucket': b, 'file':{'name': filename, 'content_type': content_type, 'data': filedata}};
+                    
         s3.upload(args, function(data){
             var upload_url = s3.url(b, filename)
             
@@ -312,15 +344,146 @@ function upload_file(req, res) {
                 res.close();
         })
 
+}
+
+function stream_upload(req, res) {
+
+    var mp = multipart.parse(req), 
+        params = {},
+        dt = new Date().valueOf(),
+        stream =  s3.stream(s3.config),
+        b,
+        name,
+        filename,
+        filetype;
+        
+    mp.addListener("partBegin", function(part) {
+        name = part.name;
+        // log('---')
+        // log(name)
+        // log(part.filename)
+        // log('---')
+        if (name)
+            params[name]='';
+            if (part.filename != undefined) {
+                filename = dt + '-' + part.filename.replace(' ', '-');
+                filetype = part.headers['content-type'];
+                var args = {'bucket': params['b'], 'file':{'name': filename, 'content_type': filetype}};
+                // log('start stream...')
+                stream.start(args)
+            }
+      });
+      
+    mp.addListener("body", function(chunk) {
+        if (name && filename != undefined) {
+            // log('stream.write...')
+            stream.write(chunk)
+        } else {
+            params[name] += chunk;
+        }
+    });
+    
+    mp.addListener("partEnd", function(part) {
+        
+        if (part.name == 'upload-file') {
+            // log('partend: ' + part.name)
+            stream.close()
+        }
+      });
+    
+    
+    mp.addListener("complete", function() {
+        log('complete')
+        var upload_url = s3.url(params['b'], filename)
+        var s = '<html>'+
+            '<head></head>'+
+            '<body>'+
+            '<img src="'+ upload_url +'" />' +
+            '<br />' +
+            upload_url + 
+            '</body>'+
+            '</html>'
+            res.writeHeader(200, {
+              "content-type" : "text/html",
+              "content-length" : s.length
+            });
+            res.write(s);
+            
+            // add a slight delay to give the stream time to write to s3.
+            setTimeout(function(){
+                log('PUT: ' + upload_url);
+                res.close();
+            }, 500)
+            
+    })
+    
+}
+
+function save_then_stream_upload(req, res) {
+
+    var stream =  s3.stream(s3.config),
+        b = req.params.b,
+        dt = new Date().valueOf(),
+        filedata = req.params['upload-file'],
+        filename = dt + '-' + req.params['upload-file-filename'],
+        filetype = req.params['upload-file-content-type'];
+        
+    var path = s3.config.upload_directory + filename
+    fs.writeFile(path, filedata, 'binary', function(err, written){
+        if (!err) {
+            log('Uploaded: ' + path)
+            var fileContent = '',
+                file = fs.createReadStream(path);
+                
+            file.addListener('open', function(fd) {
+                var args = {'bucket': b, 'file':{'name': filename,'content_type': filetype}};
+                stream.start(args)
+                
+            })
+            file.addListener('error', function(err) {
+                throw err;
+            })
+            file.addListener('data', function(data) {
+                stream.write(data)
+            })
+            file.addListener('end', function(){
+                stream.close()
+            })
+            file.addListener('close', function() {
+                var upload_url = s3.url(b, filename)
+                var response = '<html>'+
+                    '<head></head>'+
+                    '<body>'+
+                    '<img src="'+ upload_url +'" />' +
+                    '<br />' +
+                    upload_url + 
+                    '</body>'+
+                    '</html>'
+                    res.writeHeader(200, {
+                      "content-type" : "text/html",
+                      "content-length" : response.length
+                    });
+                    res.write(response);
+                            
+                    // add a slight delay to give the stream time to write to s3.
+                    setTimeout(function(){
+                        log('PUT: ' + upload_url);
+                        res.close();
+                    }, 500)
+                
+            });
+        } // no error saving
+    })
 
 }
+
+
+
 
 function delete_file(req, res){
 
     var filename = '';
     var b = '';
-
-
     
     if (req.method == 'GET') {
         filename = req.params.filename;

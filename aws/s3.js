@@ -20,7 +20,7 @@ var PUT = 'PUT',
     
 function log(s){sys.puts(s)}
 function debug(s){sys.debug(s)}
-function inspect(s){sys.inspect(s)}    
+function inspect(s){log(sys.inspect(s))}
 
 /* constructor class for s3 */
 exports.init = function(args) {
@@ -42,7 +42,7 @@ exports.url = function(bucket, object) {
 
 
 /*
-Puts a file stream to the specified bucket
+Puts a file to the specified bucket
 args = {
     bucket:'' // override for bucket
     name:''   // this name of the file once its uploaded
@@ -53,57 +53,140 @@ args = {
 cb = function(data) {}
 */
 exports.upload = function(args, cb){
-    var bucket = '', resource = '/', f, url, put_url, acl, dt, filepath, filename;
-    
+    object = put_object_options(args, this.config)
+    options = put_options(args, object, this.config)
+    rest.put([object.url, object.filename].join('/'), options).addListener('complete', cb);
+}
+
+function put_object_options(args, config) {
+    var bucket = '', resource = '/';
     if (args.bucket) 
         bucket = args.bucket + '.';
         resource = '/' + args.bucket + '/';
-    if (args.file) f = args.file;
-    acl = (args.acl) ? args.acl : 'public-read';
-    url = 'http://' + bucket + this.config.host;
-    dt = date();
-    filename = f.name;
-    filepath = resource + filename;
+        
+    var o = {
+        bucket:bucket,
+        resource: resource,
+        acl: (args.acl) ? args.acl : 'public-read',
+        url: 'http://' + bucket + config.host,
+        date:date()
+    }
+
+    if (args.file)
+        o['file']=args.file;
+        o['filename']=args.file.name;
+        o['filepath']=resource + args.file.name;
+        o['content_type'] = args.file.content_type
+    return o;
+}
+
+function put_options(args, object, config) {
+
     var content_md5 = ''; // md5.b64_hmac_md5(f.data, f.data.length);
     var content_type = 'application/octet-stream';
-    var headers = [
-        ['x-amz-acl', acl] 
+    var amz_headers = [
+        ['x-amz-acl', object.acl] 
         // not required ['X-Amz-Meta-ChecksumAlgorithm','crc32'],
         // not required ['X-Amz-Meta-FileChecksum', crc32.encode(f.data)],
     ];
 
-    // add review to the header if exists
-    if (this.config.reviewer){
-        headers.push( ['X-Amz-Meta-ReviewedBy', this.config.reviewer] )
+    // add review to the amz_header if exists
+    if (config.reviewer) {
+        amz_headers.push( ['X-Amz-Meta-ReviewedBy', config.reviewer] )
     }
     
-    var siggy = sign(this.config.secret, PUT, filepath, dt, content_md5, content_type, canonicalize(headers));
+    var siggy = sign(config.secret, PUT, object.filepath, object.date, content_md5, content_type, canonicalize(amz_headers));
     var options = {
         // multipart: true,
         headers: {
-            'Date': dt,
-            'User-Agent': this.config.user_agent,
-            'Content-Length': f.data.length,
+            'Date': object.date,
+            'User-Agent': config.user_agent,
             // 'Content-MD5': content_md5,
-            'Content-Type': content_type,
-            'Content-Encoding': content_type,
-            'Content-Disposition': " attachment; filename=\"" + filename + "\"",
-            'Authorization': authorization(this.config.key, siggy)
-        },
-        encoding: 'binary',
-        data: f.data 
+            'Content-Type': content_type, // content_type,
+            'Content-Encoding': object.content_type,
+            'Authorization': authorization(config.key, siggy) //,
+            // 'Accept':'*/*'
+        }
         // data: {
         //     'file': rest.file(f.path + f.name, f.content_type)
         //     'file': rest.data(f.name, f.content_type, f.data)
         // }
     }
-    
-    // add headers to options.headers
-    for(var i=0; i < headers.length; i++) {
-        options.headers[headers[i][0]] = headers[i][1];
+    // add expect if exists
+    // if (args.expect) options.headers['Expect'] = args.expect;
+    // if (args.transfer_encoding) options.headers['Transfer-Encoding'] = args.transfer_encoding;
+
+    // add object file data
+    if ( object.file.data != undefined) {
+        options['encoding']='binary'
+        options['data']=object.file.data;
+        options.headers['Content-Length'] = object.file.data.length;
     }
-    rest.put([url, filename].join('/'), options).addListener('complete', cb);
+    if (object.filename != undefined) {
+        options.headers['Content-Disposition'] = " attachment; filename=\"" + object.filename + "\"";
+    }
+
+    // add headers to options.headers
+    for(var i=0; i < amz_headers.length; i++) {
+        options.headers[amz_headers[i][0]] = amz_headers[i][1];
+    }
+    return options
+}
+
+
+exports.stream = function(config) {
+    return new Stream(config);
+}
+
+function Stream(config){
+    this.config = config;
+    this.client = http.createClient(80, config.host);
+    this.options = {};
+    this.object = {};
+    this.request = null;
+    this.length=0;
+}
+
+Stream.prototype.start = function(args){
+    // set object config
+    this.object = put_object_options(args, this.config);
+    this.options = put_options(args, this.object, this.config);
+    this.options.headers.Host = this.config.host;
+
+}
+
+Stream.prototype.write = function(chunk){
     
+    if (this.request==null){
+        // log('creating request object...')
+        this.options.headers['Content-Length'] = '<content-length>'; //placeholder until we know the real length
+        this.request = this.client.request('PUT', this.object.filepath, this.options.headers);
+        this.request.addListener('response', function (resp) {
+            // the body is never reached if it's successful
+            resp.addListener("data", function (chunk) {
+                // sys.puts("BODY: " + sys.inspect(chunk));
+            });
+            // the end is always reached
+            resp.addListener("end", function() {
+                // sys.puts("END");
+            });
+        });
+    }
+    
+    // log('chunk.length:' + chunk.length.toString())
+    this.length += chunk.length;
+    this.request.write(chunk, 'binary')
+}
+
+Stream.prototype.close = function(args) {
+    // replace the content-length placeholder
+    this.request.output[0] = this.request.output[0].replace('<content-length>', this.length);
+    this.request.close();
+    // inspect(this.request)
+}
+
+Stream.prototype.unixtime = function(){
+    return new Date().valueOf();
 }
 
 /*

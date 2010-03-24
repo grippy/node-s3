@@ -128,7 +128,7 @@ process.mixin(Request.prototype, {
     if (typeof this.options.data == 'object') {
       this.options.data = qs.stringify(this.options.data);
       this.headers['Content-Type'] = 'application/x-www-form-urlencoded';
-      this.headers['Content-Length'] = this.options.data.length;
+      if (this.options.data != undefined) this.headers['Content-Length'] = this.options.data.length;
     }
   
     this.request = this._makeRequest(this.options.method);

@@ -39,7 +39,10 @@ function app(){
                 case '/save_then_stream_upload':
                     parse_request_params(req, res, save_then_stream_upload);
                     break;
-                    
+                
+                case '/stream_disk_stream_upload':
+                    stream_disk_stream_upload(req,res)
+                    break;
                 case '/delete':
                     parse_request_params(req, res, delete_file);
                     break;
@@ -293,6 +296,16 @@ function display_form(req, res) {
             '<input type="file" name="upload-file" />'+
             '<input type="submit" value="Upload" />'+
             '</form>'+
+            
+            '<h3>Stream to Disk and Then Stream</h3>' +
+            '<form action="/stream_disk_stream_upload" method="post" enctype="multipart/form-data">'+
+            'Upload to ' +
+            '<select name="b">' +
+            a.join('') +
+            '</select> / ' +
+            '<input type="file" name="upload-file" />'+
+            '<input type="submit" value="Upload" />'+
+            '</form>'+
             '</body>'+
             '</html>'
         );
@@ -359,10 +372,10 @@ function stream_upload(req, res) {
         
     mp.addListener("partBegin", function(part) {
         name = part.name;
-        // log('---')
-        // log(name)
-        // log(part.filename)
-        // log('---')
+        log('---')
+        log(name)
+        log(part.filename)
+        log('---')
         if (name)
             params[name]='';
             if (part.filename != undefined) {
@@ -428,7 +441,7 @@ function save_then_stream_upload(req, res) {
         filename = dt + '-' + req.params['upload-file-filename'],
         filetype = req.params['upload-file-content-type'];
         
-    var path = s3.config.upload_directory + filename
+    var path = s3.config.upload_directory + filename;
     fs.writeFile(path, filedata, 'binary', function(err, written){
         if (!err) {
             log('Uploaded: ' + path)
@@ -438,10 +451,8 @@ function save_then_stream_upload(req, res) {
             file.addListener('open', function(fd) {
                 var args = {'bucket': b, 'file':{'name': filename,'content_type': filetype}};
                 stream.open(args, function (resp) {
-                    // the body is never reached if it's successful
-                    resp.addListener("data", function (chunk) {
-                        // sys.puts("BODY: " + sys.inspect(chunk));
-                    });
+                    // log here for error messages
+                    resp.addListener("data", function (chunk) {});
                     // the end is always reached
                     resp.addListener("end", function() {
                         sys.puts("this is end... my only friend, the end.");
@@ -483,6 +494,110 @@ function save_then_stream_upload(req, res) {
             });
         } // no error saving
     })
+
+}
+
+
+function stream_disk_stream_upload(req, res) {
+    
+    var mp = multipart.parse(req), 
+        params = {},
+        dt = new Date().valueOf(),
+        stream =  s3.stream(s3.config),
+        b,
+        name,
+        filename,
+        filetype,
+        disk,
+        path,
+        args;
+        
+    mp.addListener("partBegin", function(part) {
+        name = part.name;
+        // log('---')
+        // log(name)
+        // log(part.filename)
+        // log('---')
+        if (name)
+            params[name]='';
+            if (part.filename != undefined) {
+                filename = dt + '-' + part.filename.replace(' ', '-');
+                filetype = part.headers['content-type'];
+                log('stream to disk...')
+                path = s3.config.upload_directory + filename;
+                disk =  s3.disk(path)
+            }
+      });
+      
+    mp.addListener("body", function(chunk) {
+        if (name && filename != undefined) {
+            log('disk.write...')
+            disk.write(chunk)
+        } else {
+            params[name] += chunk;
+        }
+    });
+    
+    mp.addListener("partEnd", function(part) {
+        
+        if (part.name == 'upload-file') {
+            log('partend: ' + part.name)
+            disk.close()
+        }
+      });
+    
+    
+    mp.addListener("complete", function() {
+        // now that we have the file saved to disk...
+        // read and stream to s3
+        var file = fs.createReadStream(path);
+        file.addListener('open', function(fd) {
+            
+            args = {'bucket': params['b'], 'file':{'name': filename, 'content_type': filetype}};
+            stream.open(args, function (resp) {
+                // log here for error messages
+                resp.addListener("data", function (chunk) {});
+                // the end is always reached
+                resp.addListener("end", function() {
+                    sys.puts("this is end... my only friend, the end.");
+                });
+            })
+            
+        })
+        file.addListener('error', function(err) {
+            throw err;
+        })
+        file.addListener('data', function(data) {
+            stream.write(data)
+        })
+        file.addListener('end', function(){
+            stream.close()
+        })
+        file.addListener('close', function() {
+            var upload_url = s3.url(params['b'], filename)
+            var response = '<html>'+
+                '<head></head>'+
+                '<body>'+
+                '<img src="'+ upload_url +'" />' +
+                '<br />' +
+                upload_url + 
+                '</body>'+
+                '</html>'
+                res.writeHeader(200, {
+                  "content-type" : "text/html",
+                  "content-length" : response.length
+                });
+                res.write(response);
+                        
+                // add a slight delay to give the stream time to write to s3.
+                setTimeout(function(){
+                    log('PUT: ' + upload_url);
+                    res.close();
+                }, 500)
+            
+        });
+    })    
+    
 
 }
 

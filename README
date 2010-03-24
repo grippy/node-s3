@@ -43,15 +43,12 @@ node app.js --env=[env option (defaults to dev)]
 == Upload Options ==
 /upload (parses and loads the uploaded file in memory before putting to s3)
 /stream_upload (parses and streams to s3)
-/save_then_stream_upload (writes to disk and then streams the file to s3.)
+/save_then_stream_upload (stores in memory, writes to disk, and then streams the file to s3.)
+/stream_save_stream_upload (streams the file to disk and then streas the file to s3)
 
 Note: chunked encoding isn't supported by s3.
 
 == Future Improvements ==
-
--The application doesn't save the file to disk before uploading it. Simple tweak if you need to change the underlying /upload implementation just look at the commented out code.
-
--The application needs a few tweaks if you want it to work with Nginx Upload Module.
 
 -The views are baked into the controller action responses. I may consider porting this to http://github.com/visionmedia/express
 

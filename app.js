@@ -267,7 +267,7 @@ function display_form(req, res) {
             ' | <a href="/create_bucket">Create bucket</a>' +
             '<hr />' +
             '<h3>Upload to Memory and then PUT to S3</h3>' +
-            '<form action="/save_then_stream_upload" method="post" enctype="multipart/form-data">'+
+            '<form action="/upload" method="post" enctype="multipart/form-data">'+
             'Upload to ' +
             '<select name="b">' +
             a.join('') +
@@ -370,7 +370,7 @@ function stream_upload(req, res) {
                 filetype = part.headers['content-type'];
                 var args = {'bucket': params['b'], 'file':{'name': filename, 'content_type': filetype}};
                 // log('start stream...')
-                stream.start(args)
+                stream.open(args)
             }
       });
       
@@ -437,7 +437,16 @@ function save_then_stream_upload(req, res) {
                 
             file.addListener('open', function(fd) {
                 var args = {'bucket': b, 'file':{'name': filename,'content_type': filetype}};
-                stream.start(args)
+                stream.open(args, function (resp) {
+                    // the body is never reached if it's successful
+                    resp.addListener("data", function (chunk) {
+                        // sys.puts("BODY: " + sys.inspect(chunk));
+                    });
+                    // the end is always reached
+                    resp.addListener("end", function() {
+                        sys.puts("this is end... my only friend, the end.");
+                    });
+                })
                 
             })
             file.addListener('error', function(err) {

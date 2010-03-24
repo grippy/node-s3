@@ -147,32 +147,36 @@ function Stream(config){
     this.length=0;
 }
 
-Stream.prototype.start = function(args){
+
+/* 
+Stream.open
+    @args - the file metadata for the streaming object
+    @resonse_cb - the response callback. the response object is of type http.ClientResponse
+        function(resp) {
+            resp
+                .addListener('data', function(chunk){
+                    // if your put request has an error, it will be returned here.
+                })
+                .addListener('end', function(){})
+        }
+*/
+Stream.prototype.open = function(args, response_cb){
     // set object config
     this.object = put_object_options(args, this.config);
     this.options = put_options(args, this.object, this.config);
     this.options.headers.Host = this.config.host;
-
+    // content-length: placeholder until we know the real length
+    this.options.headers['Content-Length'] = '<content-length>'; 
+    this.request = this.client.request('PUT', this.object.filepath, this.options.headers);
+    this.request.addListener('response', response_cb || function (resp) {
+        // the data listener is only returned if there is an error. todo: sniff the error message
+        resp.addListener("data", function (chunk) {});
+        // the end is always reached
+        resp.addListener("end", function() {});
+    });
 }
 
 Stream.prototype.write = function(chunk){
-    
-    if (this.request==null){
-        // log('creating request object...')
-        this.options.headers['Content-Length'] = '<content-length>'; //placeholder until we know the real length
-        this.request = this.client.request('PUT', this.object.filepath, this.options.headers);
-        this.request.addListener('response', function (resp) {
-            // the body is never reached if it's successful
-            resp.addListener("data", function (chunk) {
-                // sys.puts("BODY: " + sys.inspect(chunk));
-            });
-            // the end is always reached
-            resp.addListener("end", function() {
-                // sys.puts("END");
-            });
-        });
-    }
-    
     // log('chunk.length:' + chunk.length.toString())
     this.length += chunk.length;
     this.request.write(chunk, 'binary')

@@ -1,5 +1,5 @@
 == What It Is? ==
-node-s3 is a simple web application for creating and manipulating buckets and files on Amazon Web Services S3. You can also use it to proxy file uploads directly to AWS.
+node-s3 is a simple web application for creating and manipulating buckets and files on Amazon Web Services S3. With slight modifications, you can also use it to proxy file uploads directly to AWS.
 
 This basis for this little app was, in part, inspired by:
 http://rfw.posterous.com/how-nodejs-saved-my-web-application
@@ -19,7 +19,7 @@ var dev = {
       key: "somekeyfordevelopment",
       secret: "somesecretfordevelopment",
       reviewer: "bastard@samurai.com",
-      upload_directory:'./tmp/'
+      upload_directory:'./tmp/' // relative to the app root
   }
 }
 
@@ -40,13 +40,12 @@ To fire up the application on each of the designated port options:
 
 node app.js --env=[env option (defaults to dev)]
 
-The index route contains a form. Adjust the form action to one of the following routes:
-
+== Upload Options ==
 /upload (parses and loads the uploaded file in memory before putting to s3)
 /stream_upload (parses and streams to s3)
 /save_then_stream_upload (writes to disk and then streams the file to s3.)
 
-Note: s3, currently, doesn't support chunked encoding.
+Note: chunked encoding isn't supported by s3.
 
 == Future Improvements ==
 
@@ -57,6 +56,8 @@ Note: s3, currently, doesn't support chunked encoding.
 -The views are baked into the controller action responses. I may consider porting this to http://github.com/visionmedia/express
 
 -The /save_then_stream_upload action should stream the file to disk using the node fs.createWriteStream api.
+
+-The uploading assumes the filedata is binary.
 
 == Wax It, Flip It, Rub It Down ==
 If you find this app useful please tweak it to your hearts content. If you feel like sharing your modifications, please do.

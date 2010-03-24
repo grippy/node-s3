@@ -266,7 +266,7 @@ function display_form(req, res) {
             '<a href="/buckets">View buckets</a>' +
             ' | <a href="/create_bucket">Create bucket</a>' +
             '<hr />' +
-            '<h3>Stream Directly to S3</h3>' +
+            '<h3>Upload to Memory and then PUT to S3</h3>' +
             '<form action="/save_then_stream_upload" method="post" enctype="multipart/form-data">'+
             'Upload to ' +
             '<select name="b">' +

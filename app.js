@@ -137,6 +137,9 @@ s3.init(config.base().s3)
 // init server
 start()
 
+/*
+* Paginate the contents of a bucket
+*/
 function get_bucket(req, res) {
     var b = req.params.b
     var marker = req.params.marker
@@ -196,6 +199,9 @@ function get_bucket(req, res) {
     }
  }
 
+/*
+* Create a bucket
+*/
 function create_bucket(req, res){
     log(sys.inspect(req.params))
     if (req.method == 'POST') {
@@ -220,6 +226,10 @@ function create_bucket(req, res){
     
 }
 
+
+/*
+* Display a list of buckets for this account. Doesn't paginate.
+*/
 function buckets(req, res){
     s3.bucket({}, function(data){
         // log(sys.inspect(data.listallmybucketsresult.buckets.bucket))
@@ -314,7 +324,7 @@ function display_form(req, res) {
 }
  
 /*
-* Handle file upload
+* Parsers the request and stores the upload in memory before sending to s3
 */
 function upload_file(req, res) {
     // Request body is binary
@@ -326,14 +336,7 @@ function upload_file(req, res) {
         filename = req.params['upload-file-filename'],
         content_type = req.params['upload-file-content-type'],
         dt = new Date().valueOf();
-        
-        // remember, this process only shows one file upload. adjust accordingly.
-        // options: streaming to disk first, then write to s3 in the callback (copy the s3 call below).
-        // var path = "./uploads/" + filename
-        // fs.writeFile(path, chunks.join(''), 'binary', function(err, written){
-        //     log('binary gods obey')
-        // })
-        
+
         filename = dt + '-' + filename.replace(' ', '-')
         var args = {'bucket': b, 'file':{'name': filename, 'content_type': content_type, 'data': filedata}};
                     
@@ -359,6 +362,9 @@ function upload_file(req, res) {
 
 }
 
+/*
+* Parses and streams the upload directly to s3
+*/
 function stream_upload(req, res) {
 
     var mp = multipart.parse(req), 
@@ -432,6 +438,9 @@ function stream_upload(req, res) {
     
 }
 
+/*
+* Stores the file in memory, write it to disk, and then streams to s3
+*/
 function save_then_stream_upload(req, res) {
 
     var stream =  s3.stream(s3.config),
@@ -496,8 +505,9 @@ function save_then_stream_upload(req, res) {
     })
 
 }
-
-
+/*
+* Streams the upload to disk and streams to s3
+*/
 function stream_disk_stream_upload(req, res) {
     
     var mp = multipart.parse(req), 
@@ -514,10 +524,6 @@ function stream_disk_stream_upload(req, res) {
         
     mp.addListener("partBegin", function(part) {
         name = part.name;
-        // log('---')
-        // log(name)
-        // log(part.filename)
-        // log('---')
         if (name)
             params[name]='';
             if (part.filename != undefined) {
@@ -601,9 +607,9 @@ function stream_disk_stream_upload(req, res) {
 
 }
 
-
-
-
+/*
+* delete a file from an s3 bucket
+*/
 function delete_file(req, res){
 
     var filename = '';

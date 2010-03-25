@@ -4,6 +4,7 @@ var http = require("http"),
     sys = require("sys"),
     events = require("events"),
     fs = require("fs"),
+    helper = require("./lib/helper"),
     s3 = require("./aws/s3"),
     config = require('./config'),
     b64 = require('./aws/crypto/base64');
@@ -531,7 +532,7 @@ function stream_disk_stream_upload(req, res) {
                 filetype = part.headers['content-type'];
                 log('stream to disk...')
                 path = s3.config.upload_directory + filename;
-                disk =  s3.disk(path)
+                disk =  helper.disk(path)
             }
       });
       

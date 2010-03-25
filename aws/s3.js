@@ -1,7 +1,6 @@
 var http = require("http"), 
     url = require("url"),
     sys = require("sys"),
-    fs = require("fs"),
     rest = require("./restler/lib/restler"),
     sha1 = require('./crypto/sha1')
     // ,
@@ -96,14 +95,14 @@ function put_options(args, object, config) {
         amz_headers.push( ['X-Amz-Meta-ReviewedBy', config.reviewer] )
     }
     
-    var siggy = sign(config.secret, PUT, object.filepath, object.date, content_md5, content_type, canonicalize(amz_headers));
+    var siggy = sign(config.secret, PUT, object.filepath, object.date, content_md5, object.content_type, canonicalize(amz_headers));
     var options = {
         // multipart: true,
         headers: {
             'Date': object.date,
             'User-Agent': config.user_agent,
             // 'Content-MD5': content_md5,
-            'Content-Type': content_type, // content_type,
+            'Content-Type': object.content_type, // content_type,
             'Content-Encoding': object.content_type,
             'Authorization': authorization(config.key, siggy) //,
             // 'Accept':'*/*'
@@ -113,9 +112,6 @@ function put_options(args, object, config) {
         //     'file': rest.data(f.name, f.content_type, f.data)
         // }
     }
-    // add expect if exists
-    // if (args.expect) options.headers['Expect'] = args.expect;
-    // if (args.transfer_encoding) options.headers['Transfer-Encoding'] = args.transfer_encoding;
 
     // add object file data
     if ( object.file.data != undefined) {
@@ -123,9 +119,11 @@ function put_options(args, object, config) {
         options['data']=object.file.data;
         options.headers['Content-Length'] = object.file.data.length;
     }
-    if (object.filename != undefined) {
-        options.headers['Content-Disposition'] = " attachment; filename=\"" + object.filename + "\"";
-    }
+    
+    // remove this so s3 serves the file instread of offering to download
+    // if (object.filename != undefined) {
+    //     options.headers['Content-Disposition'] = " attachment; filename=\"" + object.filename + "\"";
+    // }
 
     // add headers to options.headers
     for(var i=0; i < amz_headers.length; i++) {
@@ -193,29 +191,6 @@ Stream.prototype.close = function(args) {
 Stream.prototype.unixtime = function(){
     return new Date().valueOf();
 }
-
-
-
-/*
-helper class for writing files to disk
-*/
-exports.disk = function(path, options) {
-    return new Disk(path, options);
-}
-
-function Disk(path, options){
-    this.stream = fs.createWriteStream(path, options);
-}
-
-Disk.prototype.write = function(data, cb){
-    this.stream.write(data, cb || function(err, bytesWritten){})
-}
-
-Disk.prototype.close = function(cb){
-    this.stream.close(cb || function(){})
-}
-
-
 
 
 /*

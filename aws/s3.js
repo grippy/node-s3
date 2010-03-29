@@ -179,13 +179,13 @@ Stream.prototype.write = function(chunk){
     // log('chunk.length:' + chunk.length.toString())
     this.length += chunk.length;
     this.request.write(chunk, 'binary')
+    chunk=null;
 }
 
 Stream.prototype.close = function(args) {
     // replace the content-length placeholder
     this.request.output[0] = this.request.output[0].replace('<content-length>', this.length);
     this.request.close();
-    // inspect(this.request)
 }
 
 Stream.prototype.unixtime = function(){

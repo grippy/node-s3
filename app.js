@@ -7,7 +7,7 @@ var http = require("http"),
     helper = require("./lib/helper"),
     s3 = require("./aws/s3"),
     config = require('./config'),
-    b64 = require('./aws/crypto/base64');
+    b64 = require('./aws/crypto/base64')
 
 /* globals */
 var env = null
@@ -390,14 +390,22 @@ function stream_upload(req, res) {
                 filetype = part.headers['content-type'];
                 var args = {'bucket': params['b'], 'file':{'name': filename, 'content_type': filetype}};
                 // log('start stream...')
-                stream.open(args)
+                stream.open(args, function (resp) {
+                    // the data listener is only returned if there is an error. todo: sniff the error message
+                    resp.addListener("data", function (chunk) {
+                        inspect(chunk)
+                    });
+                    // the end is always reached
+                    resp.addListener("end", function() {
+                        log('this is the end')
+                    });
+                })
             }
       });
       
     mp.addListener("body", function(chunk) {
         if (name && filename != undefined) {
-            // log('stream.write...')
-            stream.write(chunk)
+            stream.write(chunk);            
         } else {
             params[name] += chunk;
         }
@@ -441,6 +449,8 @@ function stream_upload(req, res) {
 
 /*
 * Stores the file in memory, write it to disk, and then streams to s3
+* Attempts to throttle the put stream to allow for large files...
+* Be advised this isn't perfect. You'll want to test the optimal delay times.
 */
 function save_then_stream_upload(req, res) {
 
@@ -474,7 +484,9 @@ function save_then_stream_upload(req, res) {
                 throw err;
             })
             file.addListener('data', function(data) {
+                file.pause()
                 stream.write(data)
+                setTimeout(function(){file.resume()}, 200)
             })
             file.addListener('end', function(){
                 stream.close()
@@ -507,7 +519,9 @@ function save_then_stream_upload(req, res) {
 
 }
 /*
-* Streams the upload to disk and streams to s3
+* Streams the upload to disk and streams to s3.
+* Attempts to throttle the put stream to allow for large files...
+* Be advised this isn't perfect. You'll want to test the optimal delay times.
 */
 function stream_disk_stream_upload(req, res) {
     
@@ -530,7 +544,7 @@ function stream_disk_stream_upload(req, res) {
             if (part.filename != undefined) {
                 filename = dt + '-' + part.filename.replace(' ', '-');
                 filetype = part.headers['content-type'];
-                log('stream to disk...')
+                //log('stream to disk...')
                 path = s3.config.upload_directory + filename;
                 disk =  helper.disk(path)
             }
@@ -538,7 +552,7 @@ function stream_disk_stream_upload(req, res) {
       
     mp.addListener("body", function(chunk) {
         if (name && filename != undefined) {
-            log('disk.write...')
+            //log('disk.write...')
             disk.write(chunk)
         } else {
             params[name] += chunk;
@@ -548,7 +562,7 @@ function stream_disk_stream_upload(req, res) {
     mp.addListener("partEnd", function(part) {
         
         if (part.name == 'upload-file') {
-            log('partend: ' + part.name)
+            // log('partend: ' + part.name)
             disk.close()
         }
       });
@@ -563,10 +577,12 @@ function stream_disk_stream_upload(req, res) {
             args = {'bucket': params['b'], 'file':{'name': filename, 'content_type': filetype}};
             stream.open(args, function (resp) {
                 // log here for error messages
-                resp.addListener("data", function (chunk) {});
+                resp.addListener("data", function (chunk) {
+                    inspect(chunk)
+                });
                 // the end is always reached
                 resp.addListener("end", function() {
-                    sys.puts("this is end... my only friend, the end.");
+                    log("this is end... my only friend, the end.");
                 });
             })
             
@@ -575,7 +591,9 @@ function stream_disk_stream_upload(req, res) {
             throw err;
         })
         file.addListener('data', function(data) {
+            file.pause()
             stream.write(data)
+            setTimeout(function(){file.resume()}, 200)
         })
         file.addListener('end', function(){
             stream.close()

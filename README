@@ -46,15 +46,21 @@ node app.js --env=[env option (defaults to dev)]
 /save_then_stream_upload (stores in memory, writes to disk, and then streams the file to s3.)
 /stream_save_stream_upload (streams the file to disk and then streas the file to s3)
 
-Note: chunked encoding isn't supported by s3.
+== Notes ==
+
+-Chunked encoding isn't supported by s3.
+
+-I experience the following error when trying to stream large files (>10MB) to s3. Not exactly sure what the problem is. 
+
+	TypeError: Cannot call method 'flush' of undefined
+	    at Client.<anonymous> (http:514:20)
+	    at node.js:810:9
 
 == Future Improvements ==
 
 -The views are baked into the controller action responses. I may consider porting this to http://github.com/visionmedia/express
 
--The /save_then_stream_upload action should stream the file to disk using the node fs.createWriteStream api.
-
--The uploading assumes the filedata is binary.
+-Uploading to s3 assumes the filedata is binary.
 
 == Wax It, Flip It, Rub It Down ==
 If you find this app useful please tweak it to your hearts content. If you feel like sharing your modifications, please do.

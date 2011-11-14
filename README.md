@@ -8,8 +8,8 @@ http://rfw.posterous.com/how-nodejs-saved-my-web-application
 The above link should hopefully provide some insight on how this app might be useful.
 
 ## Requirements
-* 'bastard samurai' http://www.youtube.com/watch?v=TZuo3ryNFPk
-* nodejs = 0.1.33 (tested on 0.1.33)
+* **bastard samurai** http://www.youtube.com/watch?v=TZuo3ryNFPk
+* **nodejs** = 0.1.33 (tested on 0.1.33)
 
 ## Configuration 
 
@@ -50,7 +50,7 @@ To fire up the application on each of the designated port options:
 /save_then_stream_upload (stores in memory, writes to disk, and then streams the file to s3.)
 /stream_save_stream_upload (streams the file to disk and then streas the file to s3)
 
-== Notes ==
+## Notes
 
 * Chunked encoding isn't supported by s3.
 
